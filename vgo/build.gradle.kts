@@ -2,6 +2,7 @@ import org.jetbrains.kotlin.gradle.plugin.KotlinSourceSet
 import java.io.PrintWriter
 import java.nio.file.Files
 import java.nio.file.Paths
+import proguard.gradle.ProGuardTask
 
 plugins {
     id("org.jetbrains.kotlin.jvm")
@@ -96,26 +97,34 @@ tasks {
     }
 
     val optimizedJar = file("$buildDir/libs/vgo.jar")
-    val optimize by registering(JavaExec::class) {
-        description = "Runs proguard on the jar application."
-        group = "build"
+    val optimize by registering(ProGuardTask::class) {
+        injars(named("jar"))
 
-        inputs.file("$buildDir/libs/debug/vgo-$version.jar")
-        outputs.file(optimizedJar)
+        outjars(optimizedJar)
 
         val javaHome = System.getProperty("java.home")
 
-        classpath = files("$rootDir/tools/r8.jar")
-        args = listOf(
-            "--release",
-            "--classfile",
-            "--lib", javaHome,
-            "--output", "$buildDir/libs/vgo.jar",
-            "--pg-conf", "$rootDir/optimize.pro",
-            "$buildDir/libs/debug/vgo-$version.jar"
+        libraryjars(
+            mapOf("jarfilter" to "!**.jar",
+                  "filter"    to "!module-info.class"),
+            "$javaHome/jmods/"
         )
 
-        dependsOn(getByName("jar"))
+        verbose()
+        dontobfuscate()
+        optimizationpasses(5)
+        overloadaggressively()
+        allowaccessmodification()
+        mergeinterfacesaggressively()
+        dontskipnonpubliclibraryclassmembers()
+
+        keep(
+            """
+            class com.jzbrooks.vgo.Application {
+              public static void main(java.lang.String[]);
+            }
+            """
+        )
     }
 
     val binaryFile = file("$buildDir/libs/vgo")
